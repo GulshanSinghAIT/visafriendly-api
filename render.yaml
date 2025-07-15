@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: intern-visa-api
+    env: node
+    buildCommand: cd server && chmod +x build.sh && ./build.sh
+    startCommand: cd server && npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        fromDatabase:
+          name: intern-visa-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: intern-visa-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: intern-visa-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: intern-visa-db
+          property: user
+      - key: DB_PASS
+        fromDatabase:
+          name: intern-visa-db
+          property: password
+      - key: CLIENT_URL
+        value: https://your-frontend-url.onrender.com
+      - key: SERVER_URL
+        value: https://your-backend-url.onrender.com
+
+databases:
+  - name: intern-visa-db
+    databaseName: visafriendly
+    user: visafriendly 
