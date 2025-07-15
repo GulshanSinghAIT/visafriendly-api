@@ -1,0 +1,230 @@
+const fs = require('fs');
+const path = require('path');
+const db = require('../src/db/models');
+const H1bSponsorCase = db.H1bSponsorCase;
+const sequelize = require('../src/config/database');
+
+/**
+ * Parse CSV data manually (simple parser for basic CSV files)
+ * @param {string} csvContent - Raw CSV content
+ * @returns {Array} Array of objects representing CSV rows
+ */
+function parseCSV(csvContent) {
+  const lines = csvContent.trim().split('\n');
+  const headers = lines[0].split(',').map(header => header.trim().replace(/"/g, ''));
+  
+  const data = [];
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',').map(value => value.trim().replace(/"/g, ''));
+    if (values.length === headers.length) {
+      const row = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index] || null;
+      });
+      data.push(row);
+    }
+  }
+  
+  return data;
+}
+
+/**
+ * Map CSV row to H1bSponsorCase model format
+ * @param {Object} row - CSV row object
+ * @returns {Object} Mapped object for database insertion
+ */
+function mapCSVRowToModel(row) {
+  // Helper function to safely parse integers
+  const safeParseInt = (value) => {
+    if (!value || value === '' || value === 'null' || value === 'undefined') return null;
+    const cleaned = value.toString().replace(/[^0-9]/g, '');
+    const parsed = parseInt(cleaned);
+    return isNaN(parsed) ? null : parsed;
+  };
+
+  return {
+    year: row.year || row.Year || row.YEAR,
+    EmployerName: row.employer_name || row.EmployerName || row.employer || row.Employer || row.company,
+    jobTitle: row.job_title || row.jobTitle || row.JobTitle || row['Job Title'] || row.title || row.position,
+    experienceLevel: row.experience_level || row.experienceLevel || row['Experience Level'] || row.level || 'Not Specified',
+    baseSalary: safeParseInt(row.base_salary || row['Base Salary']),
+    Location: row.location || row.Location || row.city,
+    submitDate: safeParseInt(row.submit_date || row['Submit Date']),
+    startDate: safeParseInt(row.start_date || row['Start Date']),
+    caseStatus: safeParseInt(row.case_status || row['Case Status']),
+  };
+}
+
+/**
+ * Upload H1B sponsor case data from CSV file
+ * @param {string} csvFilePath - Path to the CSV file
+ * @param {Object} options - Upload options
+ */
+async function uploadH1bDataFromCSV(csvFilePath, options = {}) {
+  const {
+    batchSize = 1000,
+    skipDuplicates = true,
+    validateData = true
+  } = options;
+
+  try {
+    console.log(`📁 Reading CSV file: ${csvFilePath}`);
+    
+    // Check if file exists
+    if (!fs.existsSync(csvFilePath)) {
+      throw new Error(`File not found: ${csvFilePath}`);
+    }
+
+    // Read and parse CSV
+    const csvContent = fs.readFileSync(csvFilePath, 'utf8');
+    const csvData = parseCSV(csvContent);
+    
+    console.log(`📊 Found ${csvData.length} records in CSV`);
+
+    // Map CSV data to model format
+    const mappedData = csvData.map(mapCSVRowToModel).filter(record => {
+      if (validateData) {
+        // Basic validation
+        return record.year && record.jobTitle && record.experienceLevel;
+      }
+      return true;
+    });
+
+    console.log(`✅ ${mappedData.length} records passed validation`);
+
+    // Insert data in batches
+    let insertedCount = 0;
+    let skippedCount = 0;
+
+    for (let i = 0; i < mappedData.length; i += batchSize) {
+      const batch = mappedData.slice(i, i + batchSize);
+      
+      try {
+        if (skipDuplicates) {
+          // Insert with ignoreDuplicates option
+          const result = await H1bSponsorCase.bulkCreate(batch, {
+            ignoreDuplicates: true,
+            validate: true
+          });
+          insertedCount += result.length;
+          skippedCount += batch.length - result.length;
+        } else {
+          const result = await H1bSponsorCase.bulkCreate(batch, {
+            validate: true
+          });
+          insertedCount += result.length;
+        }
+
+        console.log(`📈 Processed batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(mappedData.length/batchSize)}`);
+      } catch (error) {
+        console.error(`❌ Error in batch ${Math.floor(i/batchSize) + 1}:`, error.message);
+        
+        // Try inserting records one by one for this batch
+        for (const record of batch) {
+          try {
+            await H1bSponsorCase.create(record);
+            insertedCount++;
+          } catch (individualError) {
+            skippedCount++;
+            console.warn(`⚠️  Skipped record for year ${record.year}: ${individualError.message}`);
+          }
+        }
+      }
+    }
+
+    console.log(`\n🎉 Upload completed!`);
+    console.log(`✅ Successfully inserted: ${insertedCount} records`);
+    console.log(`⚠️  Skipped/Duplicates: ${skippedCount} records`);
+    console.log(`📊 Total processed: ${mappedData.length} records`);
+
+  } catch (error) {
+    console.error('❌ Error uploading H1B data:', error);
+    throw error;
+  }
+}
+
+/**
+ * Main function to run the upload script
+ */
+async function main() {
+  try {
+    // Test database connection
+    await sequelize.authenticate();
+    console.log('🔗 Database connection established successfully.');
+
+    // Get CSV file path from command line arguments
+    const csvFilePath = process.argv[2];
+    
+    if (!csvFilePath) {
+      console.log(`
+🚀 H1B Sponsor Case Data Upload Script
+
+Usage: node uploadH1bData.js <csv-file-path> [options]
+
+Example:
+  node uploadH1bData.js ./data/h1b_cases.csv
+  node uploadH1bData.js ./data/h1b_cases.csv --batch-size=500 --skip-duplicates=false
+
+Expected CSV Format:
+  year,employer_name,job_title,experience_level,base_salary,location,submit_date,start_date,case_status
+  2023,TechCorp,Software Engineer,Senior,95000,New York,20230115,20230301,1
+  2023,DataCorp,Data Analyst,Junior,75000,San Francisco,20230120,20230315,1
+
+CSV Column Mapping:
+  year → year (required)
+  employer_name/EmployerName/employer/company → EmployerName
+  job_title/jobTitle/title/position → jobTitle (required)
+  experience_level/experienceLevel/level → experienceLevel (required)
+  base_salary → baseSalary (converted to integer)
+  location/Location/city → Location
+  submit_date → submitDate (converted to integer)
+  start_date → startDate (converted to integer)
+  case_status → caseStatus (converted to integer)
+      `);
+      process.exit(1);
+    }
+
+    // Parse additional options
+    const options = {
+      batchSize: 1000,
+      skipDuplicates: true,
+      validateData: true
+    };
+
+    // Simple argument parsing
+    process.argv.slice(3).forEach(arg => {
+      if (arg.startsWith('--batch-size=')) {
+        options.batchSize = parseInt(arg.split('=')[1]);
+      } else if (arg === '--skip-duplicates=false') {
+        options.skipDuplicates = false;
+      } else if (arg === '--validate-data=false') {
+        options.validateData = false;
+      }
+    });
+
+    console.log('⚙️  Upload options:', options);
+
+    // Run the upload
+    await uploadH1bDataFromCSV(csvFilePath, options);
+
+  } catch (error) {
+    console.error('💥 Script failed:', error);
+    process.exit(1);
+  } finally {
+    // Close database connection
+    await sequelize.close();
+    console.log('🔒 Database connection closed.');
+  }
+}
+
+// Run the script if called directly
+if (require.main === module) {
+  main();
+}
+
+// Export functions for use in other modules
+module.exports = {
+  uploadH1bDataFromCSV,
+  parseCSV,
+  mapCSVRowToModel
+}; 
