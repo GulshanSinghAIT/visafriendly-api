@@ -21,6 +21,37 @@ router.get("/test", async (req, res) => {
   }
 });
 
+// Debug route for contact details testing
+router.post("/contactDetails/debug", (req, res) => {
+  console.log('\n=== Contact Details Debug ===');
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  console.log('Content-Type:', req.get('Content-Type'));
+  
+  const requiredFields = ['firstName', 'lastName', 'email', 'mobile', 'password', 'referralSource'];
+  const missingFields = requiredFields.filter(field => !req.body[field]);
+  
+  res.json({
+    message: "Contact details debug endpoint",
+    receivedFields: Object.keys(req.body),
+    requiredFields,
+    missingFields,
+    fieldValues: {
+      firstName: req.body.firstName || 'MISSING',
+      lastName: req.body.lastName || 'MISSING', 
+      email: req.body.email || 'MISSING',
+      mobile: req.body.mobile || 'MISSING',
+      password: req.body.password ? 'PROVIDED' : 'MISSING',
+      referralSource: req.body.referralSource || 'MISSING',
+      city: req.body.city || 'OPTIONAL',
+      state: req.body.state || 'OPTIONAL',
+      Summary: req.body.Summary || 'OPTIONAL'
+    },
+    isValid: missingFields.length === 0,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Route to create a new user
 router.post("/contactDetails", contactController);
 router.post("/preferences", preferenceController);
