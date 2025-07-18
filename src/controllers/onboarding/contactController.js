@@ -6,6 +6,12 @@ const { sendEmail } = require("../../emailservice/emailService.js");
 // Create a new user with address (created separately)
 const contactController = async (req, res) => {
   try {
+    console.log('\n=== Contact Controller Debug ===');
+    console.log('Request Method:', req.method);
+    console.log('Request URL:', req.url);
+    console.log('Content-Type:', req.get('Content-Type'));
+    console.log('Request Body:', JSON.stringify(req.body, null, 2));
+
     const {
       firstName,
       lastName,
@@ -18,56 +24,141 @@ const contactController = async (req, res) => {
       referralSource,
     } = req.body;
 
-    console.log('Received data:', req.body); // Debug log
+    // Enhanced validation with specific field checks
+    const requiredFields = {
+      firstName: firstName,
+      lastName: lastName,
+      email: email,
+      mobile: mobile,
+      password: password,
+      referralSource: referralSource
+    };
 
-    // Validate required fields
-    if (!firstName || !lastName || !email || !mobile || !password || !referralSource) {
-      return res.status(400).json({ error: "Missing required fields" });
+    const missingFields = [];
+    const emptyFields = [];
+
+    // Check each required field
+    Object.entries(requiredFields).forEach(([fieldName, fieldValue]) => {
+      if (fieldValue === undefined || fieldValue === null) {
+        missingFields.push(fieldName);
+      } else if (typeof fieldValue === 'string' && fieldValue.trim() === '') {
+        emptyFields.push(fieldName);
+      }
+    });
+
+    // Validation error response
+    if (missingFields.length > 0 || emptyFields.length > 0) {
+      const errorMessage = {
+        error: "Validation failed",
+        message: "Missing or empty required fields",
+        missingFields: missingFields,
+        emptyFields: emptyFields,
+        requiredFields: Object.keys(requiredFields),
+        receivedFields: Object.keys(req.body),
+        fieldDetails: {
+          firstName: firstName ? `"${firstName}"` : 'MISSING',
+          lastName: lastName ? `"${lastName}"` : 'MISSING',
+          email: email ? `"${email}"` : 'MISSING',
+          mobile: mobile ? `"${mobile}"` : 'MISSING',
+          password: password ? 'PROVIDED' : 'MISSING',
+          referralSource: referralSource ? `"${referralSource}"` : 'MISSING'
+        }
+      };
+      
+      console.log('Validation Error:', JSON.stringify(errorMessage, null, 2));
+      return res.status(400).json(errorMessage);
     }
 
-    // Extract password string from the password object
-    const passwordString = typeof password === 'object' ? password.password : password;
+    // Enhanced password extraction with validation
+    let passwordString;
+    if (typeof password === 'object' && password !== null) {
+      if (password.password) {
+        passwordString = password.password;
+      } else {
+        console.log('Password object missing password property:', password);
+        return res.status(400).json({ 
+          error: "Invalid password format",
+          message: "Password object must contain a 'password' property",
+          received: typeof password
+        });
+      }
+    } else if (typeof password === 'string') {
+      passwordString = password;
+    } else {
+      return res.status(400).json({ 
+        error: "Invalid password type",
+        message: "Password must be a string or object with password property",
+        received: typeof password
+      });
+    }
 
-    console.log('Creating user with data:', {
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        error: "Invalid email format",
+        message: "Please provide a valid email address",
+        received: email
+      });
+    }
+
+    // Mobile number validation (basic)
+    const mobileStr = String(mobile);
+    if (mobileStr.length < 10 || mobileStr.length > 15) {
+      return res.status(400).json({
+        error: "Invalid mobile number",
+        message: "Mobile number must be between 10-15 digits",
+        received: mobile,
+        length: mobileStr.length
+      });
+    }
+
+    console.log('Creating user with validated data:', {
       firstName,
       lastName,
       email,
       mobileNumber: mobile,
-      passwordHash: passwordString ? '***' : undefined, // Log masked password
+      passwordHash: passwordString ? '***HIDDEN***' : undefined,
       role: 'user',
       currentPlanId: 1,
       referralSource,
-      Summary,
+      Summary: Summary || null,
+      city: city || null,
+      state: state || null
     });
 
     // Create the User record
     const newUser = await User.create({
-      firstName,
-      lastName,
-      passwordHash: passwordString, // Use the extracted password string
-      email,
-      mobileNumber: mobile,
-      role: 'user', // Add default role
-      currentPlanId: 1, // Add default plan ID
-      referralSource, // Add referral source
-      Summary,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      passwordHash: passwordString,
+      email: email.trim().toLowerCase(),
+      mobileNumber: String(mobile),
+      role: 'user',
+      currentPlanId: 1,
+      referralSource: referralSource.trim(),
+      Summary: Summary || null,
     });
-
-    
 
     console.log('User created successfully:', { id: newUser.id, email: newUser.email });
 
-    // Create Address record separately using the newUser's id as the foreign key
-    const newAddress = await Address.create({
-      city,
-      state,
-      userId: newUser.id, // link the address to the user
-    });
+    // Create Address record separately (only if city or state provided)
+    let newAddress = null;
+    if (city || state) {
+      newAddress = await Address.create({
+        city: city || null,
+        state: state || null,
+        userId: newUser.id,
+      });
+      console.log('Address created successfully:', { id: newAddress.id, userId: newAddress.userId });
+    } else {
+      console.log('No address data provided, skipping address creation');
+    }
 
-    console.log('Address created successfully:', { id: newAddress.id, userId: newAddress.userId });
-
-    // Optionally, attach the address to the user data being returned
-    newUser.dataValues.address = newAddress;
+    // Attach address to user data if created
+    if (newAddress) {
+      newUser.dataValues.address = newAddress;
+    }
 
     await sendEmail({
       to: email,
