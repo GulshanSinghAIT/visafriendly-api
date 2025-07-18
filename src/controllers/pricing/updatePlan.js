@@ -1,35 +1,12 @@
 const User = require("../../db/models/user.js");
 const PastPayments = require("../../db/models/paymentHistory.js");
 const CurrentPlans = require("../../db/models/currentPlan.js");
-
-// Helper function to map Dodo product IDs to existing database plan IDs
-const mapProductIdToPlanId = (productId) => {
-  const planMap = {
-    'pdt_gXXT6AXOHrLRiuV3efghJ': 2, // Plus for 1 Month -> Plan ID 2 (Monthly $9.99)
-    'pdt_6RuL6zJsB358bReAL7xlJ': 3, // Plus for 2 Months -> Plan ID 3 (2-Month $15.98)
-    'pdt_JJYvpfA4n7LjIUwhf9DJi': 4, // Plus for 3 Months -> Plan ID 4 (3-Month $20.97)
-  };
-  return planMap[productId] || 2; // Default to monthly plan
-};
-
-// Helper functions to get plan information from Dodo product IDs
-const getPlanNameFromProductId = (productId) => {
-  const planMap = {
-    'pdt_gXXT6AXOHrLRiuV3efghJ': 'VisaFriendly Plus - Monthly',
-    'pdt_6RuL6zJsB358bReAL7xlJ': 'VisaFriendly Plus - 2 Months',
-    'pdt_JJYvpfA4n7LjIUwhf9DJi': 'VisaFriendly Plus - 3 Months',
-  };
-  return planMap[productId] || 'VisaFriendly Plus - Monthly';
-};
-
-const getPriceFromProductId = (productId) => {
-  const priceMap = {
-    'pdt_gXXT6AXOHrLRiuV3efghJ': '9.99',
-    'pdt_6RuL6zJsB358bReAL7xlJ': '15.98',
-    'pdt_JJYvpfA4n7LjIUwhf9DJi': '20.97',
-  };
-  return priceMap[productId] || '9.99';
-};
+const { 
+  mapProductIdToPlanId, 
+  getPlanNameFromProductId, 
+  getPriceFromProductId,
+  isDodoProductId 
+} = require("../../utils/planMapping.js");
 
 const UpdatePlan = async (req, res) => {
   let { status, id, email, paymentID } = req.body;
@@ -61,7 +38,7 @@ const UpdatePlan = async (req, res) => {
     let price;
 
     // Check if id is a Dodo product ID (starts with 'pdt_')
-    if (id && id.startsWith('pdt_')) {
+    if (isDodoProductId(id)) {
       console.log('Processing Dodo product ID:', id);
       
       // Map Dodo product ID to existing database plan ID

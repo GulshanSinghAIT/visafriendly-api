@@ -1,8 +1,8 @@
 // Using separate creation without transaction
 const User = require("../../db/models/user.js");
 const Address = require("../../db/models/address.js");
-const CurrentPlans = require("../../db/models/currentPlan.js");
 const { sendEmail } = require("../../emailservice/emailService.js");
+const { ensureDefaultPlan } = require("../../utils/databaseInit.js");
 
 // Create a new user with address (created separately)
 const contactController = async (req, res) => {
@@ -115,29 +115,15 @@ const contactController = async (req, res) => {
     }
 
     // Ensure default plan exists before creating user
-    let defaultPlan = await CurrentPlans.findByPk(1);
-    if (!defaultPlan) {
-      console.log('Default plan not found, creating it...');
-      try {
-        defaultPlan = await CurrentPlans.create({
-          id: 1,
-          planName: 'Free Plan',
-          planType: 'FREE',
-          price: '0.00',
-          billingCycle: 1,
-          basicDescription: 'Basic features for new users'
-        });
-        console.log('Default plan created successfully:', defaultPlan.id);
-      } catch (planError) {
-        console.error('Error creating default plan:', planError);
-        return res.status(500).json({
-          error: "Database setup error",
-          message: "Failed to create default plan",
-          details: planError.message
-        });
-      }
-    } else {
-      console.log('Default plan exists:', defaultPlan.planName);
+    try {
+      await ensureDefaultPlan();
+    } catch (planError) {
+      console.error('Error ensuring default plan:', planError);
+      return res.status(500).json({
+        error: "Database setup error",
+        message: "Failed to ensure default plan exists",
+        details: planError.message
+      });
     }
 
     console.log('Creating user with validated data:', {
