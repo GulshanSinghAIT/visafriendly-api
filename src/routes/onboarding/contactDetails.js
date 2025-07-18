@@ -1,9 +1,9 @@
-import express from "express";
-import { contactController } from "../../controllers/onboarding/contactController.js";
-import { getPreferenceController, preferenceController } from "../../controllers/onboarding/preferenceController.js";
-import { resumeController } from "../../controllers/onboarding/resumeController.js";
-import { skillController } from "../../controllers/onboarding/skillController.js";
-import User from "../../db/models/user.js";
+const express = require("express");
+const contactController = require("../../controllers/onboarding/contactController.js");
+const { getPreferenceController, preferenceController } = require("../../controllers/onboarding/preferenceController.js");
+const { resumeController } = require("../../controllers/onboarding/resumeController.js");
+const { skillController } = require("../../controllers/onboarding/skillController.js");
+const User = require("../../db/models/user.js");
 
 const router = express.Router();
 
@@ -28,4 +28,4 @@ router.get("/getpreferences", getPreferenceController);
 router.post("/resumeUpload", resumeController);
 router.post("/skills", skillController);
 
-export default router;
+module.exports = router;

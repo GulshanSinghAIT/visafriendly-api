@@ -1,7 +1,7 @@
 const Resume = require("../../db/models/resume");
 const User = require("../../db/models/user");
 
-exports.resumeController = async (req, res) => {
+const resumeController = async (req, res) => {
   try {
     const { fileName, email, isDefault } = req.body;
 
@@ -36,3 +36,5 @@ exports.resumeController = async (req, res) => {
     res.status(500).json({ error: "Server error while saving resume" });
   }
 };
+
+module.exports = { resumeController };

@@ -1,3 +1,6 @@
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
 const WorkExperience = require("../../db/models/workExperience");
 const User = require("../../db/models/user");
 
@@ -66,4 +69,4 @@ const deleteWorkExperience = async (req, res) => {
   }
 };
 
-module.exports = { getUserWorkExperience, deleteWorkExperience };
+export { getUserWorkExperience, deleteWorkExperience };

@@ -1,3 +1,6 @@
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
 const User = require("../../db/models/user");
 const JobAlert = require("../../db/models/jobAlert");
 
@@ -62,4 +65,4 @@ const deleteAllJobAlerts = async (req, res) => {
   }
 };
 
-module.exports = { deleteJobAlert, deleteAllJobAlerts };
+export { deleteJobAlert, deleteAllJobAlerts };

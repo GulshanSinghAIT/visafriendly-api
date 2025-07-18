@@ -1,9 +1,10 @@
 // Using separate creation without transaction
-import User from "../../db/models/user.js";
-import Address from "../../db/models/address.js";
-import { sendEmail } from "../../emailservice/emailService.js";
+const User = require("../../db/models/user.js");
+const Address = require("../../db/models/address.js");
+const { sendEmail } = require("../../emailservice/emailService.js");
+
 // Create a new user with address (created separately)
-export const contactController = async (req, res) => {
+const contactController = async (req, res) => {
   try {
     const {
       firstName,
@@ -198,3 +199,5 @@ export const contactController = async (req, res) => {
     });
   }
 };
+
+module.exports = contactController;
