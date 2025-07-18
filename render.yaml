@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: intern-visa-api
+    name: visafriendly-api
     env: node
     buildCommand: cd server && chmod +x build.sh && ./build.sh
     startCommand: cd server && npm start

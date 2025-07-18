@@ -1,11 +1,14 @@
 // controllers/profile/profileController.js
-import User from "../../db/models/user.js";
-import JobType from "../../db/models/jobtype.js";
-import OpenRole from "../../db/models/openrole.js";
-import Skill from "../../db/models/skill.js";
-import UserOpenRole from "../../db/models/userOpenRoleJoinTable.js";
-import SocialProfile from "../../db/models/socialprofile.js";
-import sequelize from "../../config/database.js";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
+const User = require("../../db/models/user.js");
+const JobType = require("../../db/models/jobtype.js");
+const OpenRole = require("../../db/models/openrole.js");
+const Skill = require("../../db/models/skill.js");
+const UserOpenRole = require("../../db/models/userOpenRoleJoinTable.js");
+const SocialProfile = require("../../db/models/socialprofile.js");
+const sequelize = require("../../config/database.js");
 
 const getProfile = async (req, res) => {
   try {

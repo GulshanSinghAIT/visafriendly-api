@@ -1,3 +1,6 @@
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
 const User = require("../../db/models/user");
 const Education = require("../../db/models/education");
 
@@ -52,4 +55,4 @@ const educationController = async (req, res) => {
   }
 };
 
-module.exports = { educationController };
+export { educationController };

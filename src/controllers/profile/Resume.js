@@ -1,4 +1,7 @@
 // controllers/resume/resumeController.js
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
@@ -400,7 +403,7 @@ const setDefaultResume = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   getUserResumes,
   uploadResume,
   deleteResume,

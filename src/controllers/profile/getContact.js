@@ -1,3 +1,6 @@
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
 const User = require("../../db/models/user");
 
 const getContactInfo = async (req, res) => {
@@ -24,4 +27,4 @@ const getContactInfo = async (req, res) => {
   }
 };
 
-module.exports = { getContactInfo };
+export { getContactInfo };

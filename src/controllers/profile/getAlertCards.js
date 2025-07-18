@@ -30,4 +30,4 @@ const getUserJobAlerts = async (req, res) => {
   }
 };
 
-module.exports = { getUserJobAlerts };
+module.exports = getUserJobAlerts;

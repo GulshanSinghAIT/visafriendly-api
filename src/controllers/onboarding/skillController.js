@@ -1,6 +1,6 @@
 const { User, Skill } = require("../../db/models");
 
-exports.skillController = async (req, res) => {
+const skillController = async (req, res) => {
   try {
     const { email, skills } = req.body;
 
@@ -34,3 +34,5 @@ exports.skillController = async (req, res) => {
     res.status(500).json({ error: "Server error while submitting skills" });
   }
 };
+
+module.exports = { skillController };
