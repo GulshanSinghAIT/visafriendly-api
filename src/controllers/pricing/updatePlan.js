@@ -2,14 +2,24 @@ const User = require("../../db/models/user.js");
 const PastPayments = require("../../db/models/paymentHistory.js");
 const CurrentPlans = require("../../db/models/currentPlan.js");
 
-// Helper functions to map Dodo product IDs to plan information
+// Helper function to map Dodo product IDs to existing database plan IDs
+const mapProductIdToPlanId = (productId) => {
+  const planMap = {
+    'pdt_gXXT6AXOHrLRiuV3efghJ': 2, // Plus for 1 Month -> Plan ID 2 (Monthly $9.99)
+    'pdt_6RuL6zJsB358bReAL7xlJ': 3, // Plus for 2 Months -> Plan ID 3 (2-Month $15.98)
+    'pdt_JJYvpfA4n7LjIUwhf9DJi': 4, // Plus for 3 Months -> Plan ID 4 (3-Month $20.97)
+  };
+  return planMap[productId] || 2; // Default to monthly plan
+};
+
+// Helper functions to get plan information from Dodo product IDs
 const getPlanNameFromProductId = (productId) => {
   const planMap = {
-    'pdt_gXXT6AXOHrLRiuV3efghJ': 'Plus for 1 Month',
-    'pdt_6RuL6zJsB358bReAL7xlJ': 'Plus for 2 Months',
-    'pdt_JJYvpfA4n7LjIUwhf9DJi': 'Plus for 3 Months',
+    'pdt_gXXT6AXOHrLRiuV3efghJ': 'VisaFriendly Plus - Monthly',
+    'pdt_6RuL6zJsB358bReAL7xlJ': 'VisaFriendly Plus - 2 Months',
+    'pdt_JJYvpfA4n7LjIUwhf9DJi': 'VisaFriendly Plus - 3 Months',
   };
-  return planMap[productId] || 'VisaFriendly Plus';
+  return planMap[productId] || 'VisaFriendly Plus - Monthly';
 };
 
 const getPriceFromProductId = (productId) => {
@@ -21,20 +31,21 @@ const getPriceFromProductId = (productId) => {
   return priceMap[productId] || '9.99';
 };
 
-const getBillingCycleFromProductId = (productId) => {
-  const cycleMap = {
-    'pdt_gXXT6AXOHrLRiuV3efghJ': 1,
-    'pdt_6RuL6zJsB358bReAL7xlJ': 2,
-    'pdt_JJYvpfA4n7LjIUwhf9DJi': 3,
-  };
-  return cycleMap[productId] || 1;
-};
-
 const UpdatePlan = async (req, res) => {
   let { status, id, email, paymentID } = req.body;
 
   try {
-    console.log('UpdatePlan called with:', { status, id, email, paymentID });
+    console.log('\n=== UpdatePlan Debug ===');
+    console.log('Request Body:', { status, id, email, paymentID });
+
+    // Validate required fields
+    if (!email || !id) {
+      return res.status(400).json({ 
+        error: "Missing required fields",
+        required: ["email", "id"],
+        received: { email: !!email, id: !!id }
+      });
+    }
 
     // Find the user
     const user = await User.findOne({ where: { email } });
@@ -43,69 +54,117 @@ const UpdatePlan = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    console.log('User found:', user.id);
+    console.log('User found:', { id: user.id, currentPlanId: user.currentPlanId });
+
+    let planId;
+    let planName;
+    let price;
 
     // Check if id is a Dodo product ID (starts with 'pdt_')
     if (id && id.startsWith('pdt_')) {
       console.log('Processing Dodo product ID:', id);
       
-      // This is a Dodo product ID, create a plan record or map to existing plan
-      const planName = getPlanNameFromProductId(id);
-      console.log('Plan name:', planName);
+      // Map Dodo product ID to existing database plan ID
+      planId = mapProductIdToPlanId(id);
+      planName = getPlanNameFromProductId(id);
+      price = getPriceFromProductId(id);
       
-      // Create or find a plan based on the product ID
-      let plan = await CurrentPlans.findOne({ where: { planName } });
+      console.log('Mapped to plan ID:', planId, 'Name:', planName, 'Price:', price);
       
+      // Verify the plan exists in database
+      const plan = await CurrentPlans.findByPk(planId);
       if (!plan) {
-        console.log('Creating new plan for:', planName);
-        // Create a new plan record for this Dodo product
-        plan = await CurrentPlans.create({
-          planName: planName,
-          planType: 'MONTHLY', // Use existing enum value
-          price: getPriceFromProductId(id),
-          billingCycle: getBillingCycleFromProductId(id),
-          basicDescription: `Plan for ${planName}`,
+        console.error(`Plan ID ${planId} not found in database for product ${id}`);
+        return res.status(500).json({ 
+          error: "Database configuration error",
+          message: `Plan ID ${planId} not found. Database may need initialization.`,
+          suggestion: "Call POST /init-database to setup required plans"
         });
       }
       
-      id = plan.id; // Use the database plan ID
-      console.log('Using plan ID:', id);
+      console.log('Plan verified in database:', { 
+        id: plan.id, 
+        name: plan.planName, 
+        price: plan.price 
+      });
+      
     } else {
-      // This is a database plan ID, find the plan
-      const plan = await CurrentPlans.findOne({ where: { id } });
+      // This is a database plan ID, validate it exists
+      planId = parseInt(id);
+      const plan = await CurrentPlans.findByPk(planId);
       if (!plan) {
-        console.log('Plan not found for ID:', id);
+        console.log('Plan not found for ID:', planId);
         return res.status(404).json({ message: "Plan not found" });
       }
+      planName = plan.planName;
+      price = plan.price;
     }
 
+    // Update user's current plan if status is active
     if (status === "active") {
-      console.log('Updating user currentPlanId to:', id);
-      await user.update({ currentPlanId: id });
+      console.log(`Updating user ${user.id} currentPlanId from ${user.currentPlanId} to ${planId}`);
+      await user.update({ currentPlanId: planId });
       status = "PAID";
     }
 
-    console.log('Creating payment record with status:', status);
+    // Create payment history record
+    console.log('Creating payment record:', { 
+      status, 
+      userId: user.id, 
+      planName, 
+      price, 
+      paymentID 
+    });
+    
     const pastPayment = await PastPayments.create({
       status: status,
       userId: user.id,
-      amount: getPriceFromProductId(id) || "9.99",
-      plan: getPlanNameFromProductId(id) || "VisaFriendly Plus",
+      amount: price,
+      plan: planName,
       billingDate: new Date(),
       paymentID: paymentID,
     });
 
-    console.log('Payment record created:', pastPayment.id);
+    console.log('Payment record created successfully:', pastPayment.id);
 
-    // Send success response so frontend can clear params
-    return res
-      .status(200)
-      .json({ message: "Subscription updated successfully" });
+    // Send success response
+    return res.status(200).json({ 
+      message: "Subscription updated successfully",
+      data: {
+        userId: user.id,
+        newPlanId: planId,
+        planName: planName,
+        price: price,
+        paymentId: pastPayment.id
+      }
+    });
+    
   } catch (error) {
-    console.error("Error updating plan:", error);
+    console.error('\n=== UpdatePlan Error ===');
+    console.error('Error details:', error);
+    console.error('Request data:', { status, id, email, paymentID });
+    
+    // Handle specific database errors
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({
+        error: "Duplicate entry",
+        message: "A record with this information already exists",
+        details: error.errors?.map(err => err.message)
+      });
+    }
+    
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      return res.status(400).json({
+        error: "Invalid reference",
+        message: "Referenced plan or user does not exist",
+        details: error.message
+      });
+    }
+    
     return res.status(500).json({ 
-      message: "Error updating plan",
-      error: error.message 
+      error: "Internal server error",
+      message: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 };
