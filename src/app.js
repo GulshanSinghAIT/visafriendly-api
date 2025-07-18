@@ -138,6 +138,88 @@ app.get("/health", async (req, res) => {
   }
 });
 
+// Database initialization endpoint - seeds required data
+app.post("/init-database", async (req, res) => {
+  try {
+    const CurrentPlans = require("./db/models/currentPlan.js");
+    
+    console.log('\n=== Database Initialization ===');
+    
+    // Check and create CurrentPlans
+    const existingPlans = await CurrentPlans.findAll();
+    console.log(`Found ${existingPlans.length} existing plans`);
+    
+    if (existingPlans.length === 0) {
+      console.log('Creating default plans...');
+      
+      const defaultPlans = [
+        {
+          id: 1,
+          planName: 'Free Plan',
+          planType: 'FREE',
+          price: '0.00',
+          billingCycle: 1,
+          basicDescription: 'Basic features for new users'
+        },
+        {
+          id: 2,
+          planName: 'VisaFriendly Plus - Monthly',
+          planType: 'MONTHLY',
+          price: '9.99',
+          billingCycle: 1,
+          basicDescription: 'Premium features with monthly billing'
+        },
+        {
+          id: 3,
+          planName: 'VisaFriendly Plus - 2 Months',
+          planType: 'QUARTERLY',
+          price: '15.98',
+          billingCycle: 2,
+          basicDescription: 'Premium features with 2-month billing (Save 20%)'
+        },
+        {
+          id: 4,
+          planName: 'VisaFriendly Plus - 3 Months',
+          planType: 'QUARTERLY',
+          price: '20.97',
+          billingCycle: 3,
+          basicDescription: 'Premium features with 3-month billing (Save 30%)'
+        }
+      ];
+      
+      const createdPlans = await CurrentPlans.bulkCreate(defaultPlans);
+      console.log(`Created ${createdPlans.length} plans`);
+    }
+    
+    // Verify plans exist
+    const finalPlans = await CurrentPlans.findAll();
+    
+    res.json({
+      message: "Database initialization completed",
+      timestamp: new Date().toISOString(),
+      results: {
+        currentPlans: {
+          count: finalPlans.length,
+          plans: finalPlans.map(p => ({
+            id: p.id,
+            name: p.planName,
+            type: p.planType,
+            price: p.price
+          }))
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error("Database initialization failed:", error);
+    res.status(500).json({
+      error: "Database initialization failed",
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Debug endpoint for troubleshooting
 app.post("/debug", (req, res) => {
   res.json({
