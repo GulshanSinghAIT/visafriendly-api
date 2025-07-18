@@ -9,36 +9,112 @@ const h1bSponsorCases = require("./routes/jobs/h1bSponsorCases.js");
 const permReports = require("./routes/jobs/permReports.js");
 const referals = require("./routes/referals/referals.js");
 const pricing = require("./routes/pricing/pricing.js");
-const bodyParser = require("body-parser");
 const columnsAndDashBoard = require("./routes/dashboard/columnsAndDashboard.js");
 const loginRoutes = require("./routes/dashboard/loginRoutes.js");
 const linksRoutes = require("./routes/onboarding/links.js");
 
 const cors = require("cors");
-// Using CommonJS, no need for createRequire
 
 // Database connection test
 const sequelize = require("./config/database.js");
 
-// Debug middleware
+// Enhanced request logging middleware
 app.use((req, res, next) => {
-  console.log('Incoming Request:', req.method, req.url);
+  console.log(`\n=== Incoming Request ===`);
+  console.log(`${req.method} ${req.url}`);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Query:', JSON.stringify(req.query, null, 2));
+  
+  // Log body for POST/PUT requests (will be available after parsing)
+  const originalSend = res.send;
+  const originalJson = res.json;
+  
+  res.send = function(data) {
+    console.log(`\n=== Response for ${req.method} ${req.url} ===`);
+    console.log('Status:', res.statusCode);
+    if (res.statusCode >= 400) {
+      console.log('Error Response Body:', data);
+    }
+    return originalSend.call(this, data);
+  };
+  
+  res.json = function(data) {
+    console.log(`\n=== Response for ${req.method} ${req.url} ===`);
+    console.log('Status:', res.statusCode);
+    if (res.statusCode >= 400) {
+      console.log('Error Response Body:', JSON.stringify(data, null, 2));
+    }
+    return originalJson.call(this, data);
+  };
+  
   next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parsing middleware (removed duplicates)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-app.use(bodyParser.json()); // Parses JSON request bodies
-app.use(bodyParser.urlencoded({ extended: true })); // Parses form-encoded bodies
+// Log parsed body for debugging
+app.use((req, res, next) => {
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log('Request Body:', JSON.stringify(req.body, null, 2));
+  }
+  next();
+});
+
+// Enhanced CORS configuration
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001', 
+  'https://localhost:3000',
+  'https://localhost:3001',
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL,
+  // Add common Vercel/Netlify patterns
+  /^https:\/\/.*\.vercel\.app$/,
+  /^https:\/\/.*\.netlify\.app$/,
+  /^https:\/\/.*\.render\.com$/
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    origin: function (origin, callback) {
+      console.log('CORS Check - Origin:', origin);
+      
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in allowed list
+      const isAllowed = allowedOrigins.some(allowedOrigin => {
+        if (typeof allowedOrigin === 'string') {
+          return allowedOrigin === origin;
+        } else if (allowedOrigin instanceof RegExp) {
+          return allowedOrigin.test(origin);
+        }
+        return false;
+      });
+      
+      if (isAllowed) {
+        console.log('CORS Allowed for origin:', origin);
+        callback(null, true);
+      } else {
+        console.log('CORS Blocked for origin:', origin);
+        console.log('Allowed origins:', allowedOrigins);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+    credentials: true,
+    optionsSuccessStatus: 200
   })
 );
+
+// Preflight OPTIONS handler
+app.options('*', (req, res) => {
+  console.log('Preflight request for:', req.url);
+  res.status(200).end();
+});
 
 // Database connection test endpoint
 app.get("/health", async (req, res) => {
@@ -47,7 +123,9 @@ app.get("/health", async (req, res) => {
     res.json({ 
       status: "ok", 
       database: "connected",
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      cors_origins: allowedOrigins.filter(o => typeof o === 'string')
     });
   } catch (error) {
     console.error("Database connection test failed:", error);
@@ -60,6 +138,19 @@ app.get("/health", async (req, res) => {
   }
 });
 
+// Debug endpoint for troubleshooting
+app.post("/debug", (req, res) => {
+  res.json({
+    message: "Debug endpoint working",
+    method: req.method,
+    headers: req.headers,
+    body: req.body,
+    query: req.query,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Routes
 app.use("/onboarding", contactDetails);
 app.use("/onboarding/education", educationRoutes);
 app.use("/profile", main);
@@ -76,19 +167,86 @@ app.use("/onboarding/links", linksRoutes);
 // 404 handler
 app.use((req, res) => {
   console.log('404 Not Found:', req.method, req.url);
-  res.status(404).json({ message: 'Route not found' });
+  res.status(404).json({ 
+    message: 'Route not found',
+    method: req.method,
+    url: req.url,
+    availableRoutes: [
+      '/health',
+      '/debug',
+      '/onboarding',
+      '/onboarding/education',
+      '/profile',
+      '/settings',
+      '/jobs',
+      '/refer',
+      '/dashboard',
+      '/login',
+      '/pricing'
+    ]
+  });
 });
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
-// Error handling middleware
+// Enhanced error handling middleware
 app.use((error, req, res, next) => {
-  console.error('Application Error:', error);
-  res.status(500).json({ 
+  console.error('\n=== Application Error ===');
+  console.error('Error:', error);
+  console.error('Stack:', error.stack);
+  console.error('Request URL:', req.url);
+  console.error('Request Method:', req.method);
+  console.error('Request Body:', req.body);
+  console.error('Request Headers:', req.headers);
+  
+  // Handle specific error types
+  if (error.name === 'ValidationError') {
+    return res.status(400).json({
+      error: 'Validation Error',
+      message: error.message,
+      details: error.details || error.errors
+    });
+  }
+  
+  if (error.name === 'SequelizeValidationError') {
+    return res.status(400).json({
+      error: 'Database Validation Error',
+      message: error.message,
+      details: error.errors?.map(err => ({
+        field: err.path,
+        message: err.message,
+        value: err.value
+      }))
+    });
+  }
+  
+  if (error.name === 'SequelizeUniqueConstraintError') {
+    return res.status(400).json({
+      error: 'Duplicate Entry',
+      message: 'A record with this information already exists',
+      details: error.errors?.map(err => ({
+        field: err.path,
+        message: err.message
+      }))
+    });
+  }
+  
+  if (error.message && error.message.includes('CORS')) {
+    return res.status(403).json({
+      error: 'CORS Error',
+      message: 'Request blocked by CORS policy',
+      origin: req.headers.origin
+    });
+  }
+  
+  // Generic error response
+  res.status(error.status || 500).json({ 
     error: 'Internal Server Error',
-    message: error.message 
+    message: error.message,
+    timestamp: new Date().toISOString(),
+    ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
   });
 });
 
