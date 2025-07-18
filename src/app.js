@@ -15,8 +15,9 @@ const linksRoutes = require("./routes/onboarding/links.js");
 
 const cors = require("cors");
 
-// Database connection test
+// Database connection and utilities
 const sequelize = require("./config/database.js");
+const { initializeDatabase, validateRequiredPlans } = require("./utils/databaseInit.js");
 
 // Enhanced request logging middleware
 app.use((req, res, next) => {
@@ -120,15 +121,23 @@ app.options('*', (req, res) => {
 app.get("/health", async (req, res) => {
   try {
     await sequelize.authenticate();
+    const planValidation = await validateRequiredPlans();
+    
     res.json({ 
       status: "ok", 
       database: "connected",
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      cors_origins: allowedOrigins.filter(o => typeof o === 'string')
+      cors_origins: allowedOrigins.filter(o => typeof o === 'string'),
+      plans: {
+        valid: planValidation.isValid,
+        existing: planValidation.existingPlans,
+        missing: planValidation.missingPlans,
+        total: planValidation.totalRequired
+      }
     });
   } catch (error) {
-    console.error("Database connection test failed:", error);
+    console.error("Health check failed:", error);
     res.status(500).json({ 
       status: "error", 
       database: "disconnected",
@@ -141,73 +150,12 @@ app.get("/health", async (req, res) => {
 // Database initialization endpoint - seeds required data
 app.post("/init-database", async (req, res) => {
   try {
-    const CurrentPlans = require("./db/models/currentPlan.js");
-    
-    console.log('\n=== Database Initialization ===');
-    
-    // Check and create CurrentPlans
-    const existingPlans = await CurrentPlans.findAll();
-    console.log(`Found ${existingPlans.length} existing plans`);
-    
-    if (existingPlans.length === 0) {
-      console.log('Creating default plans...');
-      
-      const defaultPlans = [
-        {
-          id: 1,
-          planName: 'Free Plan',
-          planType: 'FREE',
-          price: '0.00',
-          billingCycle: 1,
-          basicDescription: 'Basic features for new users'
-        },
-        {
-          id: 2,
-          planName: 'VisaFriendly Plus - Monthly',
-          planType: 'MONTHLY',
-          price: '9.99',
-          billingCycle: 1,
-          basicDescription: 'Premium features with monthly billing'
-        },
-        {
-          id: 3,
-          planName: 'VisaFriendly Plus - 2 Months',
-          planType: 'QUARTERLY',
-          price: '15.98',
-          billingCycle: 2,
-          basicDescription: 'Premium features with 2-month billing (Save 20%)'
-        },
-        {
-          id: 4,
-          planName: 'VisaFriendly Plus - 3 Months',
-          planType: 'QUARTERLY',
-          price: '20.97',
-          billingCycle: 3,
-          basicDescription: 'Premium features with 3-month billing (Save 30%)'
-        }
-      ];
-      
-      const createdPlans = await CurrentPlans.bulkCreate(defaultPlans);
-      console.log(`Created ${createdPlans.length} plans`);
-    }
-    
-    // Verify plans exist
-    const finalPlans = await CurrentPlans.findAll();
+    const results = await initializeDatabase();
     
     res.json({
       message: "Database initialization completed",
       timestamp: new Date().toISOString(),
-      results: {
-        currentPlans: {
-          count: finalPlans.length,
-          plans: finalPlans.map(p => ({
-            id: p.id,
-            name: p.planName,
-            type: p.planType,
-            price: p.price
-          }))
-        }
-      }
+      results
     });
     
   } catch (error) {
@@ -255,6 +203,7 @@ app.use((req, res) => {
     url: req.url,
     availableRoutes: [
       '/health',
+      '/init-database',
       '/debug',
       '/onboarding',
       '/onboarding/education',
