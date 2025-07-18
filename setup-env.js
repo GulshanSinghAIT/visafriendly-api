@@ -54,66 +54,102 @@ REACT_APP_API_URL=http://localhost:5000
   console.log('✅ .env file already exists');
 }
 
-// Load environment variables
+// Environment validation and setup
 require('dotenv').config();
 
-console.log('🔍 Checking environment configuration...\n');
+console.log('\n=== Environment Configuration Check ===');
 
-// Check required environment variables
+// Required environment variables
 const requiredVars = [
+  'NODE_ENV',
+  'PORT'
+];
+
+// Database configuration
+const dbVars = [
   'DB_HOST',
-  'DB_PORT', 
+  'DB_PORT',
   'DB_NAME',
   'DB_USER',
   'DB_PASSWORD'
 ];
 
+// Optional but recommended
 const optionalVars = [
-  'DODO_PAYMENTS_API_KEY',
-  'DODO_WEBHOOK_SECRET',
   'CLIENT_URL',
-  'SERVER_URL',
-  'NODE_ENV',
-  'PORT',
-  'JWT_SECRET',
-  'REACT_APP_API_URL'
+  'FRONTEND_URL',
+  'EMAIL_SERVICE_CONFIG',
+  'DODO_PAYMENTS_CONFIG'
 ];
 
-console.log('📋 Required Environment Variables:');
+console.log('Current Environment:', process.env.NODE_ENV || 'development');
+console.log('Port:', process.env.PORT || '5000');
+
+// Check required variables
+console.log('\n--- Required Variables ---');
 requiredVars.forEach(varName => {
   const value = process.env[varName];
-  if (value && value !== 'your_db_user' && value !== 'your_db_password') {
-    console.log(`  ✅ ${varName}: ${value}`);
+  console.log(`${varName}: ${value ? '✓ Set' : '✗ Missing'}`);
+});
+
+// Check database variables
+console.log('\n--- Database Configuration ---');
+dbVars.forEach(varName => {
+  const value = process.env[varName];
+  if (varName === 'DB_PASSWORD') {
+    console.log(`${varName}: ${value ? '✓ Set (hidden)' : '✗ Missing'}`);
   } else {
-    console.log(`  ❌ ${varName}: Not configured`);
+    console.log(`${varName}: ${value || '✗ Missing'}`);
   }
 });
 
-console.log('\n📋 Optional Environment Variables:');
+// Check optional variables
+console.log('\n--- Optional Configuration ---');
 optionalVars.forEach(varName => {
   const value = process.env[varName];
-  if (value && !value.includes('your_')) {
-    console.log(`  ✅ ${varName}: ${varName.includes('SECRET') || varName.includes('KEY') ? '***' : value}`);
-  } else {
-    console.log(`  ⚠️  ${varName}: Not configured (optional)`);
-  }
+  console.log(`${varName}: ${value || 'Not set'}`);
 });
 
-console.log('\n🔧 Dodo Payments Configuration:');
-const dodoApiKey = process.env.DODO_PAYMENTS_API_KEY;
-if (dodoApiKey && dodoApiKey !== 'your_dodo_payments_api_key_here') {
-  console.log('  ✅ Dodo Payments API key is configured');
-  console.log('  💳 Payment processing will work normally');
+// CORS Origins Check
+console.log('\n--- CORS Configuration ---');
+const corsOrigins = [
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+if (corsOrigins.length > 0) {
+  console.log('Configured CORS origins:');
+  corsOrigins.forEach(origin => console.log(`  - ${origin}`));
 } else {
-  console.log('  ⚠️  Dodo Payments API key not configured');
-  console.log('  🔧 Application will use mock payment processing');
-  console.log('  📝 To enable real payments, get an API key from: https://dodopayments.com');
+  console.log('⚠️  No CORS origins configured - will allow localhost only');
 }
 
-console.log('\n📚 Next Steps:');
-console.log('1. Edit the .env file with your actual database credentials');
-console.log('2. (Optional) Add your Dodo Payments API key for real payment processing');
-console.log('3. Run "npm start" to start the server');
-console.log('4. Run "npm test" to test the payment integration');
+// Validation warnings
+console.log('\n--- Validation Summary ---');
+const missingRequired = requiredVars.filter(varName => !process.env[varName]);
+const missingDb = dbVars.filter(varName => !process.env[varName]);
 
-console.log('\n�� Setup complete!'); 
+if (missingRequired.length > 0) {
+  console.log('⚠️  Missing required variables:', missingRequired.join(', '));
+}
+
+if (missingDb.length > 0) {
+  console.log('⚠️  Missing database variables:', missingDb.join(', '));
+}
+
+if (!process.env.CLIENT_URL && !process.env.FRONTEND_URL) {
+  console.log('⚠️  No frontend URL configured - CORS might block requests');
+}
+
+if (missingRequired.length === 0 && missingDb.length === 0) {
+  console.log('✅ All required environment variables are configured');
+}
+
+console.log('\n=== Environment Check Complete ===\n');
+
+module.exports = {
+  isConfigured: missingRequired.length === 0 && missingDb.length === 0,
+  missingRequired,
+  missingDb,
+  corsOrigins
+}; 
