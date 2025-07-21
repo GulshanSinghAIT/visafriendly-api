@@ -4,7 +4,7 @@ services:
     env: node
     buildCommand: cd server && chmod +x build.sh && ./build.sh
     startCommand: cd server && npm start
-    healthCheckPath: /
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -29,9 +29,11 @@ services:
           name: intern-visa-db
           property: password
       - key: CLIENT_URL
-        value: https://your-frontend-url.onrender.com
+        value: https://visafriendly.onrender.com
+      - key: FRONTEND_URL
+        value: https://visafriendly.onrender.com
       - key: SERVER_URL
-        value: https://your-backend-url.onrender.com
+        value: https://visafriendly-api.onrender.com
 
 databases:
   - name: intern-visa-db

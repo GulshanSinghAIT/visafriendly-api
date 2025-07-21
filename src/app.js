@@ -264,6 +264,25 @@ app.use((error, req, res, next) => {
     });
   }
   
+  // Handle database connection errors
+  if (error.message && (error.message.includes('SSL') || error.message.includes('TLS'))) {
+    return res.status(500).json({
+      error: 'Database Connection Error',
+      message: 'SSL/TLS connection issue with database',
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+  
+  if (error.name === 'SequelizeConnectionError' || error.name === 'SequelizeHostNotFoundError') {
+    return res.status(500).json({
+      error: 'Database Connection Error',
+      message: 'Unable to connect to database',
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+  
   if (error.message && error.message.includes('CORS')) {
     return res.status(403).json({
       error: 'CORS Error',

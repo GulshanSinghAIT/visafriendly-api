@@ -40,7 +40,8 @@
     "dev": "nodemon server.js",
     "setup": "node setup-env.js",
     "test": "jest",
-    "test:payments": "jest server/test/dodoPayments.test.js"
+    "test:payments": "jest server/test/dodoPayments.test.js",
+    "test:db": "node test-db-connection.js"
   },
   "devDependencies": {
     "sequelize-cli": "^6.6.3"

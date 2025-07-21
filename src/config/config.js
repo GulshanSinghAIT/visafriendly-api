@@ -10,6 +10,12 @@ module.exports = {
     dialect: 'postgres',
     dialectOptions: {
       ssl: false
+    },
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
     }
   },
   production: {
@@ -23,7 +29,15 @@ module.exports = {
       ssl: {
         require: true,
         rejectUnauthorized: false
-      }
+      },
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 0
+    },
+    pool: {
+      max: 10,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
     },
     logging: false
   },
@@ -34,6 +48,9 @@ module.exports = {
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     dialect: 'postgres',
+    dialectOptions: {
+      ssl: false
+    },
     logging: false
   }
 };
