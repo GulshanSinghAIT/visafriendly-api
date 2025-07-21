@@ -3,6 +3,7 @@ const User = require("../../db/models/user.js");
 const Address = require("../../db/models/address.js");
 const { sendEmail } = require("../../emailservice/emailService.js");
 const { ensureDefaultPlan } = require("../../utils/databaseInit.js");
+const { generateReferralCode, validateReferralCode } = require("../../utils/referralCodeGenerator.js");
 
 // Create a new user with address (created separately)
 const contactController = async (req, res) => {
@@ -23,6 +24,7 @@ const contactController = async (req, res) => {
       Summary,
       password,
       referralSource,
+      referralCode,
     } = req.body;
 
     // Enhanced validation with specific field checks
@@ -140,6 +142,18 @@ const contactController = async (req, res) => {
       state: state || null
     });
 
+    // Handle referral code validation and referral tracking
+    let referredBy = null;
+    if (referralCode && referralCode.trim()) {
+      const referringUser = await validateReferralCode(referralCode.trim());
+      if (referringUser) {
+        referredBy = referringUser.id;
+        console.log('Valid referral code found:', { referralCode, referringUserId: referringUser.id });
+      } else {
+        console.log('Invalid referral code provided:', referralCode);
+      }
+    }
+
     // Create the User record
     const newUser = await User.create({
       firstName: firstName.trim(),
@@ -150,8 +164,46 @@ const contactController = async (req, res) => {
       role: 'user',
       currentPlanId: 1,
       referralSource: referralSource.trim(),
+      referredBy: referredBy,
       Summary: Summary || null,
     });
+
+    // Generate unique referral code for the new user
+    const userReferralCode = await generateReferralCode(newUser.id);
+    await newUser.update({ referralCode: userReferralCode });
+    console.log('Generated referral code for new user:', { userId: newUser.id, referralCode: userReferralCode });
+
+    // Award points to referring user if valid referral
+    if (referredBy) {
+      try {
+        const { sequelize } = require("../../db/models/index");
+        await sequelize.query(
+          'UPDATE "pointsTables" SET "referals_accepted" = "referals_accepted" + 1, "total_points" = "total_points" + 100, "updatedAt" = CURRENT_TIMESTAMP WHERE "userId" = ?',
+          {
+            replacements: [referredBy],
+            type: sequelize.QueryTypes.UPDATE,
+          }
+        );
+        console.log('Awarded 100 points to referring user:', { referringUserId: referredBy });
+      } catch (error) {
+        console.error('Error awarding points to referring user:', error);
+      }
+    }
+
+    // Create points table entry for new user
+    try {
+      const { sequelize } = require("../../db/models/index");
+      await sequelize.query(
+        'INSERT INTO "pointsTables" ("referals_accepted","total_points","userId","createdAt","updatedAt") values (0,0,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)',
+        {
+          replacements: [newUser.id],
+          type: sequelize.QueryTypes.INSERT,
+        }
+      );
+      console.log('Created points table entry for new user:', { userId: newUser.id });
+    } catch (error) {
+      console.error('Error creating points table entry:', error);
+    }
 
     console.log('User created successfully:', { id: newUser.id, email: newUser.email });
 

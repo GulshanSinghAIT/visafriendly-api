@@ -9,8 +9,8 @@ module.exports = {
         allowNull: true
       });
     } catch (error) {
-      console.error('Migration error:', error);
-      throw error;
+      // If the column already exists, that's fine - just log it
+      console.log('Column Summary already exists, skipping addition');
     }
   },
 

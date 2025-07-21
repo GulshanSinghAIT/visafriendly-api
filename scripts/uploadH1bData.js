@@ -42,16 +42,27 @@ function mapCSVRowToModel(row) {
     return isNaN(parsed) ? null : parsed;
   };
 
+  // Helper function to combine location and state
+  const combineLocation = (location, state) => {
+    if (!location && !state) return null;
+    if (!location) return state;
+    if (!state) return location;
+    return `${location}, ${state}`;
+  };
+
   return {
     year: row.year || row.Year || row.YEAR,
-    EmployerName: row.employer_name || row.EmployerName || row.employer || row.Employer || row.company,
+    EmployerName: row.employer_name || row.EmployerName || row.employer || row.Employer || row.EMPLOYER || row.company || row.Company,
     jobTitle: row.job_title || row.jobTitle || row.JobTitle || row['Job Title'] || row.title || row.position,
     experienceLevel: row.experience_level || row.experienceLevel || row['Experience Level'] || row.level || 'Not Specified',
-    baseSalary: safeParseInt(row.base_salary || row['Base Salary']),
-    Location: row.location || row.Location || row.city,
-    submitDate: safeParseInt(row.submit_date || row['Submit Date']),
-    startDate: safeParseInt(row.start_date || row['Start Date']),
-    caseStatus: safeParseInt(row.case_status || row['Case Status']),
+    baseSalary: safeParseInt(row.base_salary || row.baseSalary || row['Base Salary'] || row.salary),
+    Location: combineLocation(
+      row.location || row.Location || row.LOCATION || row.city || row.City,
+      row.state || row.State || row.STATE
+    ),
+    submitDate: safeParseInt(row.submit_date || row.submitDate || row['Submit Date']),
+    startDate: safeParseInt(row.start_date || row.startDate || row['Start Date']),
+    caseStatus: safeParseInt(row.case_status || row.caseStatus || row['Case Status'] || row.status),
   };
 }
 
@@ -84,7 +95,7 @@ async function uploadH1bDataFromCSV(csvFilePath, options = {}) {
     // Map CSV data to model format
     const mappedData = csvData.map(mapCSVRowToModel).filter(record => {
       if (validateData) {
-        // Basic validation
+        // Basic validation - year, jobTitle, and experienceLevel are required
         return record.year && record.jobTitle && record.experienceLevel;
       }
       return true;
@@ -166,20 +177,22 @@ Example:
   node uploadH1bData.js ./data/h1b_cases.csv --batch-size=500 --skip-duplicates=false
 
 Expected CSV Format:
-  year,employer_name,job_title,experience_level,base_salary,location,submit_date,start_date,case_status
-  2023,TechCorp,Software Engineer,Senior,95000,New York,20230115,20230301,1
-  2023,DataCorp,Data Analyst,Junior,75000,San Francisco,20230120,20230315,1
+  Year,Employer,Job Title,Experience Level,Base Salary,Location,State,Submit Date,Start Date,Case Status
+  2023,TechCorp,Software Engineer,Senior,95000,New York,NY,20230115,20230301,1
+  2023,DataCorp,Data Analyst,Junior,75000,San Francisco,CA,20230120,20230315,1
 
 CSV Column Mapping:
-  year → year (required)
-  employer_name/EmployerName/employer/company → EmployerName
-  job_title/jobTitle/title/position → jobTitle (required)
-  experience_level/experienceLevel/level → experienceLevel (required)
-  base_salary → baseSalary (converted to integer)
-  location/Location/city → Location
-  submit_date → submitDate (converted to integer)
-  start_date → startDate (converted to integer)
-  case_status → caseStatus (converted to integer)
+  Year → year (required)
+  Employer → EmployerName
+  Job Title → jobTitle (required)
+  Experience Level → experienceLevel (required)
+  Base Salary → baseSalary (converted to integer)
+  Location + State → Location (combined as "Location, State")
+  Submit Date → submitDate (converted to integer)
+  Start Date → startDate (converted to integer)
+  Case Status → caseStatus (converted to integer)
+
+Note: Location and State columns are combined into a single Location field.
       `);
       process.exit(1);
     }

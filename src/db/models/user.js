@@ -180,6 +180,27 @@ User.init(
         notEmpty: { msg: "Referral source cannot be empty" },
       },
     },
+    referralCode: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      unique: true,
+      validate: {
+        len: {
+          args: [6, 10],
+          msg: "Referral code must be between 6 and 10 characters",
+        },
+      },
+    },
+    referredBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "User",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "SET NULL",
+    },
     Summary: {
       type: DataTypes.TEXT,
       allowNull: true,
