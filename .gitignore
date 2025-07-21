@@ -37,4 +37,7 @@ logs
 pids
 *.pid
 *.seed
-*.pid.lock 
+*.pid.lock
+
+# Large data files (exceed GitHub's 100MB limit)
+scripts/*.csv
