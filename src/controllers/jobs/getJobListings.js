@@ -20,6 +20,19 @@ const getJobListings = async (req, res) => {
       });
     }
 
+    // Parse filters if it's a string
+    let parsedFilters = filters;
+    if (typeof filters === 'string') {
+      try {
+        parsedFilters = JSON.parse(filters);
+      } catch (error) {
+        console.error("Error parsing filters:", error);
+        parsedFilters = {};
+      }
+    }
+
+    console.log("Received filters:", parsedFilters);
+
     // Get user and their plan
     const user = await User.findOne({
       where: { email },
@@ -39,30 +52,24 @@ const getJobListings = async (req, res) => {
     const currentPlanId = user.currentPlanId;
     const isPaidUser = currentPlanId > 1; // Plans 2, 3, 4 are paid plans
     
-    // Temporarily disable daily search tracking until model is fixed
+    // Temporary daily search tracking using a simple approach
     let dailySearchCount = 0;
-    /*
     if (!isPaidUser) {
-      const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+      // For now, we'll use a simple in-memory approach until we fix the DailySearch model
+      // In production, you should implement proper database tracking
+      const today = new Date().toISOString().split('T')[0];
+      const searchKey = `${email}_${today}`;
       
-      // Find or create daily search record for today
-      let dailySearch = await DailySearch.findOne({
-        where: {
-          email: email,
-          searchDate: today
-        }
-      });
-      
-      if (!dailySearch) {
-        // Create new record for today
-        dailySearch = await DailySearch.create({
-          email: email,
-          searchDate: today,
-          searchCount: 0
-        });
+      // This is a temporary solution - in production, use the database
+      if (!global.dailySearchCounts) {
+        global.dailySearchCounts = {};
       }
       
-      dailySearchCount = dailySearch.searchCount;
+      if (!global.dailySearchCounts[searchKey]) {
+        global.dailySearchCounts[searchKey] = 0;
+      }
+      
+      dailySearchCount = global.dailySearchCounts[searchKey];
       
       // Check if user has exceeded daily limit
       if (dailySearchCount >= 5) {
@@ -75,59 +82,77 @@ const getJobListings = async (req, res) => {
       }
       
       // Increment search count for this request
-      await dailySearch.increment('searchCount');
-      dailySearchCount = dailySearch.searchCount + 1; // +1 because we just incremented
+      global.dailySearchCounts[searchKey] = dailySearchCount + 1;
+      dailySearchCount = global.dailySearchCounts[searchKey];
     }
-    */
 
     // Build where clause for filters
     const whereClause = {};
     
-    if (filters.jobCategory) {
+    if (parsedFilters.jobCategory) {
       whereClause.jobTitle = {
-        [Op.iLike]: `%${filters.jobCategory}%`
+        [Op.iLike]: `%${parsedFilters.jobCategory}%`
       };
     }
     
-    if (filters.jobType) {
-      whereClause.jobType = filters.jobType;
+    if (parsedFilters.jobType) {
+      whereClause.jobType = parsedFilters.jobType;
     }
     
-    if (filters.workSetting) {
-      whereClause.workSetting = filters.workSetting;
+    if (parsedFilters.workSetting) {
+      whereClause.workSetting = parsedFilters.workSetting;
     }
     
-    if (filters.sponsorType) {
-      whereClause.sponsorType = filters.sponsorType;
+    if (parsedFilters.sponsorType) {
+      whereClause.sponsorType = parsedFilters.sponsorType;
     }
     
-    if (filters.startupJob) {
-      whereClause.startupJob = filters.startupJob;
+    if (parsedFilters.startupJob) {
+      whereClause.startupJob = parsedFilters.startupJob;
     }
     
-    if (filters.minSalary) {
+    if (parsedFilters.minSalary) {
       whereClause.minSalary = {
-        [Op.gte]: parseFloat(filters.minSalary)
+        [Op.gte]: parseFloat(parsedFilters.minSalary)
       };
     }
     
-    if (filters.maxSalary) {
+    if (parsedFilters.maxSalary) {
       whereClause.maxSalary = {
-        [Op.lte]: parseFloat(filters.maxSalary)
+        [Op.lte]: parseFloat(parsedFilters.maxSalary)
       };
     }
     
-    if (filters.location) {
+    if (parsedFilters.location) {
       whereClause.location = {
-        [Op.iLike]: `%${filters.location}%`
+        [Op.iLike]: `%${parsedFilters.location}%`
       };
     }
     
-    if (filters.skills) {
+    if (parsedFilters.skills) {
       whereClause.skills = {
-        [Op.iLike]: `%${filters.skills}%`
+        [Op.iLike]: `%${parsedFilters.skills}%`
       };
     }
+
+    // Add experience filter
+    if (parsedFilters.minExperience) {
+      whereClause.yearsOfExperience = {
+        [Op.gte]: parseInt(parsedFilters.minExperience)
+      };
+    }
+    
+    if (parsedFilters.maxExperience) {
+      if (whereClause.yearsOfExperience) {
+        whereClause.yearsOfExperience[Op.lte] = parseInt(parsedFilters.maxExperience);
+      } else {
+        whereClause.yearsOfExperience = {
+          [Op.lte]: parseInt(parsedFilters.maxExperience)
+        };
+      }
+    }
+
+    console.log("Where clause:", whereClause);
 
     // Pagination
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -143,6 +168,8 @@ const getJobListings = async (req, res) => {
       offset: offset,
       order: [['createdAt', 'DESC']]
     });
+
+    console.log(`Found ${jobs.length} jobs out of ${totalJobs} total`);
 
     // Transform jobs to match frontend expectations
     const transformedJobs = jobs.map(job => ({
@@ -183,7 +210,7 @@ const getJobListings = async (req, res) => {
         currentPlanId,
         isPaidUser,
         searchLimit: isPaidUser ? 'unlimited' : 5,
-        dailySearchCount: dailySearchCount // Will be 0 until model is fixed
+        dailySearchCount: dailySearchCount
       }
     });
 
