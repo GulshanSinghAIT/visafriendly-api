@@ -11,7 +11,7 @@ console.log("Available models:", Object.keys(models));
 
 const getJobListings = async (req, res) => {
   try {
-    const { email, page = 1, limit = 15, filters = {} } = req.query;
+    const { email, page = 1, limit = 15, filters = {}, isNewSearch = false } = req.query;
     
     if (!email) {
       return res.status(400).json({
@@ -32,6 +32,7 @@ const getJobListings = async (req, res) => {
     }
 
     console.log("Received filters:", parsedFilters);
+    console.log("Is new search:", isNewSearch);
 
     // Get user and their plan
     const user = await User.findOne({
@@ -52,8 +53,10 @@ const getJobListings = async (req, res) => {
     const currentPlanId = user.currentPlanId;
     const isPaidUser = currentPlanId > 1; // Plans 2, 3, 4 are paid plans
     
-    // Temporary daily search tracking using a simple approach
+    // Only track daily search count for NEW searches (when filters change), not pagination
     let dailySearchCount = 0;
+    let limitReached = false;
+    
     if (!isPaidUser) {
       // For now, we'll use a simple in-memory approach until we fix the DailySearch model
       // In production, you should implement proper database tracking
@@ -73,17 +76,35 @@ const getJobListings = async (req, res) => {
       
       // Check if user has exceeded daily limit
       if (dailySearchCount >= 5) {
-        return res.status(403).json({
-          success: false,
-          message: "You have reached your daily limit of 5 job searches. Please upgrade to continue or try again tomorrow.",
-          limitReached: true,
-          dailySearchCount: dailySearchCount
-        });
+        limitReached = true;
+        
+        // If this is a new search, block it
+        if (isNewSearch === 'true') {
+          return res.status(403).json({
+            success: false,
+            message: "You have reached your daily limit of 5 job searches. You can only view your current results. Please upgrade to continue or try again tomorrow.",
+            limitReached: true,
+            dailySearchCount: dailySearchCount
+          });
+        }
+        
+        // If this is pagination and limit is reached, only allow current page
+        // Force page to 1 to prevent pagination
+        if (parseInt(page) > 1) {
+          return res.status(403).json({
+            success: false,
+            message: "You have reached your daily limit of 5 job searches. You can only view your current results. Please upgrade to continue or try again tomorrow.",
+            limitReached: true,
+            dailySearchCount: dailySearchCount
+          });
+        }
       }
       
-      // Increment search count for this request
-      global.dailySearchCounts[searchKey] = dailySearchCount + 1;
-      dailySearchCount = global.dailySearchCounts[searchKey];
+      // Only increment search count for NEW searches
+      if (isNewSearch === 'true' && !limitReached) {
+        global.dailySearchCounts[searchKey] = dailySearchCount + 1;
+        dailySearchCount = global.dailySearchCounts[searchKey];
+      }
     }
 
     // Build where clause for filters
