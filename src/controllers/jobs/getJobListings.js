@@ -1,8 +1,13 @@
 const { job } = require("../../db/models");
 const { User } = require("../../db/models");
 const { CurrentPlans } = require("../../db/models");
-const { DailySearch } = require("../../db/models");
+// const { DailySearch } = require("../../db/models"); // Temporarily commented out
 const { Op } = require("sequelize");
+
+// Debug: Log all available models
+const models = require("../../db/models");
+console.log("Available models:", Object.keys(models));
+// console.log("DailySearch model:", DailySearch);
 
 const getJobListings = async (req, res) => {
   try {
@@ -34,8 +39,9 @@ const getJobListings = async (req, res) => {
     const currentPlanId = user.currentPlanId;
     const isPaidUser = currentPlanId > 1; // Plans 2, 3, 4 are paid plans
     
-    // Track daily search count for free users
+    // Temporarily disable daily search tracking until model is fixed
     let dailySearchCount = 0;
+    /*
     if (!isPaidUser) {
       const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
       
@@ -72,6 +78,7 @@ const getJobListings = async (req, res) => {
       await dailySearch.increment('searchCount');
       dailySearchCount = dailySearch.searchCount + 1; // +1 because we just incremented
     }
+    */
 
     // Build where clause for filters
     const whereClause = {};
@@ -99,13 +106,13 @@ const getJobListings = async (req, res) => {
     }
     
     if (filters.minSalary) {
-      whereClause.maxSalary = {
+      whereClause.minSalary = {
         [Op.gte]: parseFloat(filters.minSalary)
       };
     }
     
     if (filters.maxSalary) {
-      whereClause.minSalary = {
+      whereClause.maxSalary = {
         [Op.lte]: parseFloat(filters.maxSalary)
       };
     }
@@ -122,67 +129,43 @@ const getJobListings = async (req, res) => {
       };
     }
 
-    // Calculate pagination
-    const offset = (page - 1) * limit;
+    // Pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
     
     // Get total count for pagination
     const totalJobs = await job.count({ where: whereClause });
-    const totalPages = Math.ceil(totalJobs / limit);
-
+    const totalPages = Math.ceil(totalJobs / parseInt(limit));
+    
     // Get jobs with pagination
     const jobs = await job.findAll({
       where: whereClause,
       limit: parseInt(limit),
       offset: offset,
-      order: [['jobPostingDate', 'DESC']],
-      attributes: [
-        'id',
-        'companyName',
-        'jobTitle',
-        'yearsOfExperience',
-        'minExperience',
-        'location',
-        'jobType',
-        'workSetting',
-        'minSalary',
-        'maxSalary',
-        'startupJob',
-        'jobPostingDate',
-        'visaSponsoring',
-        'sponsorType',
-        'applyUrl',
-        'responsibilities',
-        'companyLogo',
-        'jobDescription',
-        'smallDescription',
-        'skills',
-        'tags'
-      ]
+      order: [['createdAt', 'DESC']]
     });
 
-    // Transform data to match frontend expectations
-    const transformedJobs = jobs.map((job, index) => ({
+    // Transform jobs to match frontend expectations
+    const transformedJobs = jobs.map(job => ({
       jId: job.id,
-      company: job.companyName,
       title: job.jobTitle,
-      exp: job.yearsOfExperience || 0,
+      company: job.companyName,
       location: job.location,
-      type: job.jobType,
+      exp: job.yearsOfExperience,
+      salary: job.minSalary,
+      date: job.jobPostingDate,
       workSetting: job.workSetting,
-      salary: job.maxSalary,
+      jobType: job.jobType,
+      skills: job.skills,
+      jobDescription: job.jobDescription,
+      smallDescription: job.smallDescription,
+      responsibilities: job.responsibilities,
+      applyUrl: job.applyUrl,
+      companyLogo: job.companyLogo,
+      visaSponsoring: job.visaSponsoring,
+      sponsorType: job.sponsorType,
+      startupJob: job.startupJob,
       minSalary: job.minSalary,
       maxSalary: job.maxSalary,
-      startupJob: job.startupJob,
-      date: job.jobPostingDate,
-      visaSponsoring: job.visaSponsoring,
-      h1Type: job.sponsorType,
-      applyLink: job.applyUrl,
-      responsibility: job.responsibilities,
-      logo: job.companyLogo,
-      expText: job.minExperience,
-      smallDesc: job.smallDescription,
-      fullDesc: job.jobDescription,
-      skills: job.skills,
       tags: job.tags
     }));
 
@@ -200,7 +183,7 @@ const getJobListings = async (req, res) => {
         currentPlanId,
         isPaidUser,
         searchLimit: isPaidUser ? 'unlimited' : 5,
-        dailySearchCount: dailySearchCount
+        dailySearchCount: dailySearchCount // Will be 0 until model is fixed
       }
     });
 

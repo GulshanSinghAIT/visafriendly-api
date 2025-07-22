@@ -16,36 +16,26 @@ module.exports = (sequelize, DataTypes) => {
     },
     email: {
       type: DataTypes.STRING,
-      allowNull: false,
-      unique: false // Multiple records per email (one per day)
+      allowNull: false
     },
     searchDate: {
-      type: DataTypes.DATEONLY, // Store only the date part
+      type: DataTypes.DATEONLY,
       allowNull: false
     },
     searchCount: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0
-    },
-    createdAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW
     }
   }, {
     sequelize,
     modelName: 'DailySearch',
     tableName: 'daily_searches',
+    timestamps: true,
     indexes: [
       {
         unique: true,
-        fields: ['email', 'searchDate'] // Ensure one record per user per day
+        fields: ['email', 'searchDate']
       }
     ]
   });
