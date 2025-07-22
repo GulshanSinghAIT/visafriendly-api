@@ -31,25 +31,86 @@ job.init(
     type: DataTypes.INTEGER
   },
   companyName: {
-    type: DataTypes.STRING
+    type: DataTypes.STRING,
+    allowNull: false
   },
-  role: {
-    type: DataTypes.STRING
+  jobTitle: {
+    type: DataTypes.STRING,
+    allowNull: false
   },
-  yoe: {
-    type: DataTypes.INTEGER
+  yearsOfExperience: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  minExperience: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
   location: {
-    type: DataTypes.STRING
+    type: DataTypes.STRING,
+    allowNull: false
   },
   jobType: {
-    type: DataTypes.STRING
+    type: DataTypes.STRING,
+    allowNull: false
   },
-  salary: {
-    type: DataTypes.STRING
+  workSetting: {
+    type: DataTypes.STRING,
+    allowNull: false
   },
-  postedOn: {
-    type: DataTypes.DATE
+  minSalary: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true
+  },
+  maxSalary: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true
+  },
+  startupJob: {
+    type: DataTypes.ENUM('Yes', 'No'),
+    allowNull: false,
+    defaultValue: 'No'
+  },
+  jobPostingDate: {
+    type: DataTypes.DATE,
+    allowNull: false
+  },
+  visaSponsoring: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
+  sponsorType: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  applyUrl: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  responsibilities: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  companyLogo: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  jobDescription: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  smallDescription: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  skills: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  tags: {
+    type: DataTypes.TEXT,
+    allowNull: true
   },
   createdAt: {
     allowNull: false,
