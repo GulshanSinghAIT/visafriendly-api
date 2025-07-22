@@ -1,6 +1,7 @@
 const { job } = require("../../db/models");
 const { User } = require("../../db/models");
 const { CurrentPlans } = require("../../db/models");
+const { DailySearch } = require("../../db/models");
 const { Op } = require("sequelize");
 
 const getJobListings = async (req, res) => {
@@ -33,19 +34,43 @@ const getJobListings = async (req, res) => {
     const currentPlanId = user.currentPlanId;
     const isPaidUser = currentPlanId > 1; // Plans 2, 3, 4 are paid plans
     
-    // Check if free user has exceeded their limit
+    // Track daily search count for free users
+    let dailySearchCount = 0;
     if (!isPaidUser) {
-      // For free users, we'll implement a simple counter
-      // In a production environment, you might want to track this in a separate table
-      const userSearchCount = parseInt(req.query.searchCount || 0);
+      const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
       
-      if (userSearchCount >= 5) {
-        return res.status(403).json({
-          success: false,
-          message: "You have reached your free plan limit of 5 job searches. Please upgrade to continue.",
-          limitReached: true
+      // Find or create daily search record for today
+      let dailySearch = await DailySearch.findOne({
+        where: {
+          email: email,
+          searchDate: today
+        }
+      });
+      
+      if (!dailySearch) {
+        // Create new record for today
+        dailySearch = await DailySearch.create({
+          email: email,
+          searchDate: today,
+          searchCount: 0
         });
       }
+      
+      dailySearchCount = dailySearch.searchCount;
+      
+      // Check if user has exceeded daily limit
+      if (dailySearchCount >= 5) {
+        return res.status(403).json({
+          success: false,
+          message: "You have reached your daily limit of 5 job searches. Please upgrade to continue or try again tomorrow.",
+          limitReached: true,
+          dailySearchCount: dailySearchCount
+        });
+      }
+      
+      // Increment search count for this request
+      await dailySearch.increment('searchCount');
+      dailySearchCount = dailySearch.searchCount + 1; // +1 because we just incremented
     }
 
     // Build where clause for filters
@@ -174,7 +199,8 @@ const getJobListings = async (req, res) => {
       userPlan: {
         currentPlanId,
         isPaidUser,
-        searchLimit: isPaidUser ? 'unlimited' : 5
+        searchLimit: isPaidUser ? 'unlimited' : 5,
+        dailySearchCount: dailySearchCount
       }
     });
 
