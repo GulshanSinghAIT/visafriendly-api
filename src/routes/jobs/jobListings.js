@@ -26,6 +26,22 @@ try {
     });
 }
 
+// Public job listings for before sign-in page
+try {
+    const { getPublicJobListings } = require("../../controllers/jobs/getPublicJobListings");
+    router.get("/listings/public", getPublicJobListings);
+    console.log("✅ getPublicJobListings route added");
+} catch (error) {
+    console.error("❌ Error loading getPublicJobListings:", error.message);
+    router.get("/listings/public", (req, res) => {
+        res.json({
+            success: false,
+            message: "getPublicJobListings controller failed to load",
+            error: error.message
+        });
+    });
+}
+
 try {
     const { bulkInsertJobs, clearAllJobs } = require("../../controllers/jobs/bulkInsertJobs");
     router.post("/bulk-insert", bulkInsertJobs);
